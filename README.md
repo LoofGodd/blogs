@@ -1,18 +1,35 @@
-# Loofgodd
+# LoofGodd Blog
 
-To start your Phoenix server:
+Elixir blog with posts, revisions, tags, and roles.
 
-  * Run `mix setup` to install and setup dependencies
-  * Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+## Setup
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+1. **Clone & deps**
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+   ```bash
+   git clone <repo> && cd loofgodd_blog
+   mix deps.get
+   ```
 
-## Learn more
+2. **Database**
 
-  * Official website: https://www.phoenixframework.org/
-  * Guides: https://hexdocs.pm/phoenix/overview.html
-  * Docs: https://hexdocs.pm/phoenix
-  * Forum: https://elixirforum.com/c/phoenix-forum
-  * Source: https://github.com/phoenixframework/phoenix
+   - Edit `config/*.exs` for your DB
+   - Run `mix ecto.migrate`
+
+3. **Run & Test**
+
+   ```bash
+   # server
+   mix phx.server
+   # list posts
+   mix run scripts/read_posts.exs
+   # tests
+   mix test
+   ```
+
+## Core Modules
+
+- **Role**: seeds default role (`id=1`)
+- **Post**: posts + revisions + tags via `create_post/3`
+- **Tag**: upserts tags with usage count
+- **PostTag**: join schema for posts & tags
