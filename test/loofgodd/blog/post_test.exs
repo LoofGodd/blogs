@@ -3,6 +3,7 @@ defmodule Loofgodd.Blog.PostTest do
 
   import Loofgodd.AccountsFixtures
   alias Loofgodd.Blog.{Post, PostRevision, PostTag, Tag}
+  alias Loofgodd.Blog
   alias Loofgodd.Repo
   alias Loofgodd.Accounts
   alias Loofgodd.Accounts.User
@@ -14,8 +15,6 @@ defmodule Loofgodd.Blog.PostTest do
         %Role{}
         |> Role.changeset(%{name: "super_admin", description: "Unrestricted access"})
         |> Repo.insert(onconflict: :nothing, table: "name")
-
-      IO.inspect(role, label: "Role created")
 
       {:ok, %User{} = user} =
         Accounts.register_user(%{
@@ -43,7 +42,7 @@ defmodule Loofgodd.Blog.PostTest do
       user: user,
       valid_attrs: attrs
     } do
-      assert {:ok, %Post{} = post} = Post.create_blog(attrs, user.id)
+      assert {:ok, %Post{} = post} = Blog.create_blog(attrs, user.id)
 
       assert post.title == attrs[:title]
       assert post.content == attrs[:content]
@@ -79,7 +78,7 @@ defmodule Loofgodd.Blog.PostTest do
       # Pre-create a tag
       %Tag{name: "Elixir", usage_count: 5} |> Repo.insert!()
 
-      assert {:ok, _} = Post.create_blog(attrs, user.id)
+      assert {:ok, _} = Blog.create_blog(attrs, user.id)
       tag = Repo.get_by!(Tag, name: "Elixir")
       # Incremented from 5
       assert tag.usage_count == 6
@@ -89,13 +88,12 @@ defmodule Loofgodd.Blog.PostTest do
       invalid_attrs = %{"title" => "", "content" => "", "tag_names" => "Elixir"}
 
       assert {:error, %Ecto.Changeset{} = changeset} =
-               Post.create_blog(invalid_attrs, user.id)
+               Blog.create_blog(invalid_attrs, user.id)
 
-      IO.inspect(errors_on(changeset)[:title] == ["can't be blank"], label: "Changeset Error")
-      # assert errors_on(changeset)[:title] == ["can't be blank"]
-      # assert errors_on(changeset)[:content] == ["can't be blank"]
-      #
-      # # Verify no post, revision, or tags were created
+      assert errors_on(changeset)[:title] == ["can't be blank"]
+      assert errors_on(changeset)[:content] == ["can't be blank"]
+
+      #  Verify no post, revision, or tags were created
       assert Repo.aggregate(Post, :count, :id) == 0
       assert Repo.aggregate(PostRevision, :count, :id) == 0
       assert Repo.aggregate(Tag, :count, :id) == 0
@@ -103,16 +101,16 @@ defmodule Loofgodd.Blog.PostTest do
 
     test "handles duplicate slug gracefully", %{user: user, valid_attrs: attrs} do
       # Create a post with the same slug
-      Post.create_blog(attrs, user.id)
+      Blog.create_blog(attrs, user.id)
 
       # Try creating another post with the same slug
-      assert {:error, %Ecto.Changeset{} = changeset} = Post.create_blog(attrs, user.id)
+      assert {:error, %Ecto.Changeset{} = changeset} = Blog.create_blog(attrs, user.id)
       assert errors_on(changeset)[:slug] == ["has already been taken"]
     end
 
     test "creates post without tags if tag_names is empty", %{user: user, valid_attrs: attrs} do
       attrs = Map.put(attrs, :tag_names, "")
-      assert {:ok, %Post{} = post} = Post.create_blog(attrs, user.id)
+      assert {:ok, %Post{} = post} = Blog.create_blog(attrs, user.id)
       assert post.title == "Test Post"
 
       # Verify no tags or post_tags
@@ -127,7 +125,7 @@ defmodule Loofgodd.Blog.PostTest do
       invalid_user_id = 999
 
       assert {:error, %Ecto.Changeset{} = changeset} =
-               Post.create_blog(attrs, invalid_user_id)
+               Blog.create_blog(attrs, invalid_user_id)
 
       assert errors_on(changeset)[:user_id] == ["does not exist"]
     end
