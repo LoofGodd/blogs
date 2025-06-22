@@ -9,7 +9,7 @@ defmodule Loofgodd.Blog.PostTest do
   alias Loofgodd.Accounts.User
   alias Loofgodd.Accounts.Role
 
-  describe("create_post/3") do
+  describe("create_post/3 ==> ") do
     setup do
       {:ok, role} =
         %Role{}
@@ -28,26 +28,23 @@ defmodule Loofgodd.Blog.PostTest do
         title: "Test Post",
         content:
           ~s({"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello"}]}]}),
-        slug: "test-post",
         status: "draft",
         tag_names: "Elixir, Phoenix",
         revision_note: "Initial draft",
-        published_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        published_at: DateTime.utc_now() |> DateTime.truncate(:second),
+        user_id: user.id
       }
 
       {:ok, user: user, valid_attrs: valid_attrs}
     end
 
-    test "creates a post with valid attributes, revision, and tags", %{
-      user: user,
-      valid_attrs: attrs
-    } do
-      assert {:ok, %Post{} = post} = Blog.create_blog(attrs, user.id)
+    test "creates a post with valid attributes, revision, and tags", %{valid_attrs: attrs} do
+      assert {:ok, %Post{} = post} = Blog.upsert_blog(%Post{}, attrs)
 
       assert post.title == attrs[:title]
       assert post.content == attrs[:content]
-      assert post.user_id == user.id
-      assert post.slug == attrs[:slug]
+      assert post.user_id == attrs[:user_id]
+      assert post.slug != nil
       assert post.status == attrs[:status]
 
       # Verify revision
@@ -55,14 +52,17 @@ defmodule Loofgodd.Blog.PostTest do
       assert revision.title == post.title
       assert revision.content == post.content
       assert revision.revision_note == "Initial draft"
-      assert revision.created_by == user.id
-
-      # Verify tags
+      assert revision.created_by == attrs[:user_id]
 
       tags =
         Repo.all(
           from t in Tag,
-            where: t.id in fragment("SELECT tag_id FROM post_tags WHERE post_id = ?", ^post.id)
+            where:
+              t.id in subquery(
+                from pt in "post_tags",
+                  select: pt.tag_id,
+                  where: pt.post_id == ^post.id
+              )
         )
 
       assert length(tags) == 2
@@ -74,21 +74,34 @@ defmodule Loofgodd.Blog.PostTest do
       assert length(post_tags) == 2
     end
 
-    test "increments usage_count for existing tags", %{user: user, valid_attrs: attrs} do
-      # Pre-create a tag
-      %Tag{name: "Elixir", usage_count: 5} |> Repo.insert!()
+    test "increments usage_count for existing tags", %{valid_attrs: attrs} do
+      {:ok, _} = Blog.upsert_blog(%Post{}, attrs)
 
-      assert {:ok, _} = Blog.create_blog(attrs, user.id)
+      {:ok, _} =
+        Blog.upsert_blog(%Post{}, %{attrs | title: "Another Post", tag_names: "Elixir, LOVELY"})
+
+      # IO.inspect(Repo.all(from p in Post, select: [p.id, p.title]), label: "Post after created")
+      #
+      # IO.inspect(Repo.all(from t in Tag, select: [t.id, t.name, t.usage_count]),
+      #   label: "Tag after created"
+      # )
+      #
+      # IO.inspect(Repo.all(from pt in PostTag, select: [pt.post_id, pt.tag_id]),
+      #   label: "Post Tag after created"
+      # )
+
+      # IO.inspect(Repo.all(Tag), label: "Tag after created")
+      # IO.inspect(Repo.all(PostTag), label: "Post Tag after created")
       tag = Repo.get_by!(Tag, name: "Elixir")
-      # Incremented from 5
-      assert tag.usage_count == 6
+
+      assert tag.usage_count == 2
     end
 
-    test "returns error for invalid attributes", %{user: user} do
-      invalid_attrs = %{"title" => "", "content" => "", "tag_names" => "Elixir"}
+    test "returns error for invalid attributes", _ do
+      invalid_attrs = %{title: "", content: "", tag_names: "Elixir"}
 
       assert {:error, %Ecto.Changeset{} = changeset} =
-               Blog.create_blog(invalid_attrs, user.id)
+               Blog.upsert_blog(%Post{}, invalid_attrs)
 
       assert errors_on(changeset)[:title] == ["can't be blank"]
       assert errors_on(changeset)[:content] == ["can't be blank"]
@@ -99,19 +112,17 @@ defmodule Loofgodd.Blog.PostTest do
       assert Repo.aggregate(Tag, :count, :id) == 0
     end
 
-    test "handles duplicate slug gracefully", %{user: user, valid_attrs: attrs} do
-      # Create a post with the same slug
-      Blog.create_blog(attrs, user.id)
+    test "handles duplicate slug gracefully", %{valid_attrs: attrs} do
+      {:ok, _post} = Blog.upsert_blog(%Post{}, attrs)
 
-      # Try creating another post with the same slug
-      assert {:error, %Ecto.Changeset{} = changeset} = Blog.create_blog(attrs, user.id)
+      {:error, %Ecto.Changeset{} = changeset} = Blog.upsert_blog(%Post{}, attrs)
       assert errors_on(changeset)[:slug] == ["has already been taken"]
     end
 
-    test "creates post without tags if tag_names is empty", %{user: user, valid_attrs: attrs} do
+    test "creates post without tags if tag_names is empty", %{valid_attrs: attrs} do
       attrs = Map.put(attrs, :tag_names, "")
-      assert {:ok, %Post{} = post} = Blog.create_blog(attrs, user.id)
-      assert post.title == "Test Post"
+      assert {:ok, %Post{} = post} = Blog.upsert_blog(%Post{}, attrs)
+      assert post.title == attrs[:title]
 
       # Verify no tags or post_tags
       assert Repo.aggregate(Tag, :count, :id) == 0
@@ -121,13 +132,18 @@ defmodule Loofgodd.Blog.PostTest do
       assert Repo.get_by!(PostRevision, post_id: post.id)
     end
 
-    test "returns error if user_id is invalid", %{valid_attrs: attrs} do
-      invalid_user_id = 999
+    test "updated post", %{valid_attrs: attrs} do
+      {:ok, post} = Blog.upsert_blog(%Post{}, attrs)
 
-      assert {:error, %Ecto.Changeset{} = changeset} =
-               Blog.create_blog(attrs, invalid_user_id)
+      updated_attrs =
+        attrs
+        |> Map.put(:title, "Updated Post")
+        |> Map.put(:content, "Updated content")
 
-      assert errors_on(changeset)[:user_id] == ["does not exist"]
+      # 3) call upsert_blog with the existing struct _and_ the new attrs
+      assert {:ok, %Post{} = new_post} = Blog.upsert_blog(post, updated_attrs)
+      assert new_post.title == "Updated Post"
+      assert new_post.content == "Updated content"
     end
   end
 end

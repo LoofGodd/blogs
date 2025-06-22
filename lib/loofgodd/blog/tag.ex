@@ -1,6 +1,7 @@
 defmodule Loofgodd.Blog.Tag do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
   alias Loofgodd.Repo
   alias Loofgodd.Blog.PostTag
 
@@ -11,7 +12,6 @@ defmodule Loofgodd.Blog.Tag do
     timestamps(type: :utc_datetime)
   end
 
-  @doc false
   def changeset(tag, attrs) do
     tag
     |> cast(attrs, [:name, :usage_count])
@@ -19,41 +19,33 @@ defmodule Loofgodd.Blog.Tag do
     |> foreign_key_constraint(:name, message: "does not exist")
   end
 
-  def create(attrs) do
-    %__MODULE__{}
-    |> changeset(attrs)
-    |> Repo.insert(
-      on_conflict: [inc: [usage_count: 1]],
-      conflict_target: :name
-    )
-  end
-
   def insert_all(post, tag_names) when is_list(tag_names) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    entries =
-      tag_names
-      # avoid duplicate work in this batch
-      |> Enum.uniq()
-      |> Enum.map(fn name ->
-        %{name: name, usage_count: 1, inserted_at: now, updated_at: now}
-      end)
-
-    {_count, tags} =
-      Repo.insert_all(
-        __MODULE__,
-        entries,
-        on_conflict: [inc: [usage_count: 1]],
-        conflict_target: [:name],
-        returning: true
+    tag_names
+    |> Enum.uniq()
+    |> Enum.map(fn name ->
+      %{name: name, usage_count: 1, inserted_at: now, updated_at: now}
+    end)
+    |> then(fn entries ->
+      Repo.insert_all(__MODULE__, entries,
+        on_conflict: :nothing,
+        on_conflict_target: [:name]
       )
 
-    tags
-    |> Enum.uniq()
-    |> Enum.map(fn tag ->
+      from(t in __MODULE__, where: t.name in ^tag_names)
+      |> Repo.all()
+    end)
+    |> Enum.each(fn tag ->
       PostTag.create(post, tag)
+
+      count_tages = PostTag.count_tags(tag)
+
+      tag
+      |> changeset(%{usage_count: count_tages})
+      |> Repo.update()
     end)
 
-    {:ok, tags}
+    {:ok, "nick"}
   end
 end

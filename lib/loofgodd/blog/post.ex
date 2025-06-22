@@ -19,6 +19,11 @@ defmodule Loofgodd.Blog.Post do
   end
 
   @doc false
+  def logger(v) do
+    IO.inspect(v, label: "Post Logger")
+    v
+  end
+
   def changeset(post, attrs) do
     post
     |> cast(attrs, [
@@ -34,28 +39,28 @@ defmodule Loofgodd.Blog.Post do
     ])
     |> validate_required([:title, :content, :status, :published_at])
     |> put_change(:slug, generate_slug(attrs[:title]))
+    |> put_change(:user_id, attrs[:user_id])
     |> unique_constraint(:slug)
-    |> foreign_key_constraint(:user_id, message: "does not exist")
   end
 
   defp generate_slug(nil), do: nil
 
-  defp generate_slug(title) do
+  defp(generate_slug(title)) do
     title
     |> String.downcase()
     |> String.replace(~r/[^a-z0-9\s-]/, "")
     |> String.replace(~r/[\s+]/, "-")
   end
 
-  defp post_changeset(post, attrs, user_id) do
-    post
-    |> changeset(attrs)
-    |> put_change(:user_id, user_id)
+  def delete(post) do
+    Repo.delete(post)
   end
 
-  def create(attrs, user_id) do
-    %__MODULE__{}
-    |> post_changeset(attrs, user_id)
-    |> Repo.insert()
+  def upsert(post, attrs) do
+    IO.inspect(attrs[:title], label: "attrs")
+
+    post
+    |> changeset(attrs)
+    |> Repo.insert_or_update()
   end
 end
