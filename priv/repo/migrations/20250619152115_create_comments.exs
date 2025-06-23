@@ -6,6 +6,7 @@ defmodule Loofgodd.Repo.Migrations.CreateComments do
       add :content, :text
       add :status, :string
       add :post_id, references(:posts, on_delete: :nothing)
+      add :parent_id, references(:comments, on_delete: :delete_all), null: true
       add :user_id, references(:users, on_delete: :nothing)
 
       timestamps(type: :utc_datetime)

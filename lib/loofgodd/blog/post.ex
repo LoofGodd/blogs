@@ -5,6 +5,7 @@ defmodule Loofgodd.Blog.Post do
   import Ecto.Query
   alias Loofgodd.Repo
   alias Loofgodd.Blog.Like
+  alias Loofgodd.Blog.Comment
 
   schema "posts" do
     field :status, :string
@@ -19,6 +20,7 @@ defmodule Loofgodd.Blog.Post do
 
     many_to_many :tags, Loofgodd.Blog.Tag, join_through: Loofgodd.Blog.PostTag
     has_many :likes, Loofgodd.Blog.Like
+    has_many :comments, Loofgodd.Blog.Comment
     timestamps(type: :utc_datetime)
   end
 
@@ -113,5 +115,15 @@ defmodule Loofgodd.Blog.Post do
 
   def count_likes(post) do
     Loofgodd.Repo.aggregate(Like, :count, :id, where: [post_id: post.id])
+  end
+
+  def list_comments(post_id, limit \\ 10) do
+    from(c in Comment,
+      where: c.post_id == ^post_id and c.status == "published" and is_nil(c.parent_id),
+      order_by: [desc: c.inserted_at],
+      limit: ^limit,
+      preload: [:user, replies: [:user]]
+    )
+    |> Repo.all()
   end
 end

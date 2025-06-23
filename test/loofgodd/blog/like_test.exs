@@ -42,7 +42,7 @@ defmodule Loofgodd.Blog.LikeTest do
       role_fixture()
       user_fixture()
 
-      for i <- 1..20 do
+      for _ <- 1..20 do
         user_fixture()
       end
 
