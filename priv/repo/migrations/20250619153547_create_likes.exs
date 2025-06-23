@@ -9,6 +9,7 @@ defmodule Loofgodd.Repo.Migrations.CreateLikes do
       timestamps(type: :utc_datetime)
     end
 
+    create unique_index(:likes, [:post_id, :user_id])
     create index(:likes, [:post_id])
     create index(:likes, [:user_id])
   end

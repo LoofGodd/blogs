@@ -2,40 +2,22 @@ defmodule Loofgodd.Blog.PostTest do
   use Loofgodd.DataCase
 
   import Loofgodd.AccountsFixtures
+  import Loofgodd.Blog.BlogFixtures
   alias Loofgodd.Blog.{Post, PostRevision, PostTag, Tag}
   alias Loofgodd.Blog
   alias Loofgodd.Repo
-  alias Loofgodd.Accounts
-  alias Loofgodd.Accounts.User
-  alias Loofgodd.Accounts.Role
 
-  describe("create_post/3 ==> ") do
+  describe("upsert post/2 ==> ") do
     setup do
-      {:ok, role} =
-        %Role{}
-        |> Role.changeset(%{name: "super_admin", description: "Unrestricted access"})
-        |> Repo.insert(onconflict: :nothing, table: "name")
+      role_fixture()
+      user = user_fixture()
 
-      {:ok, %User{} = user} =
-        Accounts.register_user(%{
-          :email => unique_user_email(),
-          :username => username(),
-          :password => valid_user_password(),
-          :role_id => role.id
+      valid_attrs =
+        post_valid_attributes(%{
+          user_id: user.id
         })
 
-      valid_attrs = %{
-        title: "Test Post",
-        content:
-          ~s({"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello"}]}]}),
-        status: "draft",
-        tag_names: "Elixir, Phoenix",
-        revision_note: "Initial draft",
-        published_at: DateTime.utc_now() |> DateTime.truncate(:second),
-        user_id: user.id
-      }
-
-      {:ok, user: user, valid_attrs: valid_attrs}
+      {:ok, valid_attrs: valid_attrs}
     end
 
     test "creates a post with valid attributes, revision, and tags", %{valid_attrs: attrs} do
@@ -80,18 +62,6 @@ defmodule Loofgodd.Blog.PostTest do
       {:ok, _} =
         Blog.upsert_blog(%Post{}, %{attrs | title: "Another Post", tag_names: "Elixir, LOVELY"})
 
-      # IO.inspect(Repo.all(from p in Post, select: [p.id, p.title]), label: "Post after created")
-      #
-      # IO.inspect(Repo.all(from t in Tag, select: [t.id, t.name, t.usage_count]),
-      #   label: "Tag after created"
-      # )
-      #
-      # IO.inspect(Repo.all(from pt in PostTag, select: [pt.post_id, pt.tag_id]),
-      #   label: "Post Tag after created"
-      # )
-
-      # IO.inspect(Repo.all(Tag), label: "Tag after created")
-      # IO.inspect(Repo.all(PostTag), label: "Post Tag after created")
       tag = Repo.get_by!(Tag, name: "Elixir")
 
       assert tag.usage_count == 2
@@ -140,10 +110,13 @@ defmodule Loofgodd.Blog.PostTest do
         |> Map.put(:title, "Updated Post")
         |> Map.put(:content, "Updated content")
 
+      tag = Repo.get_by!(Tag, name: "Elixir")
+
       # 3) call upsert_blog with the existing struct _and_ the new attrs
       assert {:ok, %Post{} = new_post} = Blog.upsert_blog(post, updated_attrs)
       assert new_post.title == "Updated Post"
       assert new_post.content == "Updated content"
+      assert tag.usage_count == 1
     end
   end
 end

@@ -8,7 +8,7 @@ defmodule Loofgodd.Blog.Tag do
   schema "tags" do
     field :name, :string
     field :usage_count, :integer
-
+    many_to_many :posts, Loofgodd.Blog.Post, join_through: Loofgodd.Blog.PostTag
     timestamps(type: :utc_datetime)
   end
 

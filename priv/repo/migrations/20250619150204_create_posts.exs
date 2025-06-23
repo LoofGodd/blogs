@@ -17,6 +17,6 @@ defmodule Loofgodd.Repo.Migrations.CreatePosts do
     end
 
     create unique_index(:posts, [:slug])
-    create index(:posts, [:user_id])
+    create index(:posts, [:user_id, :status])
   end
 end
