@@ -20,7 +20,16 @@ defmodule LoofgoddWeb.Router do
   scope "/", LoofgoddWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live_session :defual,
+      on_mount: [
+        {LoofgoddWeb.Util, :save_request_uri},
+        {LoofgoddWeb.UserAuth, :mount_current_user}
+      ] do
+      live "/", HomeLive.Index, :index
+      live "/about", HomeLive.Index, :index
+      live "/blog", HomeLive.Index, :index
+      live "/projects", HomeLive.Index, :index
+    end
   end
 
   # Other scopes may use custom stacks.
@@ -47,12 +56,14 @@ defmodule LoofgoddWeb.Router do
   end
 
   ## Authentication routes
-
   scope "/", LoofgoddWeb do
     pipe_through [:browser, :redirect_if_user_is_authenticated]
 
     live_session :redirect_if_user_is_authenticated,
-      on_mount: [{LoofgoddWeb.UserAuth, :redirect_if_user_is_authenticated}] do
+      on_mount: [
+        {LoofgoddWeb.UserAuth, :redirect_if_user_is_authenticated},
+        {LoofgoddWeb.Util, :save_request_uri}
+      ] do
       live "/users/register", UserRegistrationLive, :new
       live "/users/log_in", UserLoginLive, :new
       live "/users/reset_password", UserForgotPasswordLive, :new
